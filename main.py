@@ -21,8 +21,8 @@ from autoaugment import CIFAR10Policy
 # from densenet import *
 # from densenet_cifar import *
 # from resnet_cifar import *
-from seperable_net import *
-# from snn_graph import *
+# from seperable_net import *
+from snn_graph import *
 from utils import progress_bar
 
 
@@ -78,7 +78,7 @@ print('==> Building model..')
 # net = SNet(n_size=3, num_classes=100)
 # net = preact_resnet110_cifar(num_classes=100)
 # net = resnet110_cifar(num_classes=100)
-net = resnet164_cifar(num_classes=100)
+net = sresnet164_cifar(num_classes=100)
 # net = preact_resnet164_cifar()
 # net = densenet_BC_cifar(depth=100, k=12, num_classes=100)
 # print(net)
@@ -97,10 +97,10 @@ print(sum(p.numel() for p in net.parameters() if p.requires_grad))
 # # if args.resume:
 # #     # Load checkpoint.
 
-print('==> Resuming from checkpoint..')
-assert os.path.isdir('checkpoint'), 'Error: no checkpoint directory found!'
-checkpoint = torch.load('./checkpoint/resnet164_2_1c100_167.t7')
-# checkpoint = torch.load('./checkpoint/sresnet164s2nc100_182.t7')
+# print('==> Resuming from checkpoint..')
+# assert os.path.isdir('checkpoint'), 'Error: no checkpoint directory found!'
+# checkpoint = torch.load('./checkpoint/resnet164_2_1c100_192.t7')
+# # checkpoint = torch.load('./checkpoint/sresnet164s2nc100_182.t7')
 # for key in checkpoint['net'].keys():
 #     substring = key.split('device_')
 #     from_key = substring[0]+'device_1'+substring[1][1:] if len(substring)>=2 else key
@@ -108,9 +108,9 @@ checkpoint = torch.load('./checkpoint/resnet164_2_1c100_167.t7')
 #         checkpoint['net'][key] = checkpoint['net'][from_key]
 
 
-net.load_state_dict(checkpoint['net'])
-best_acc = checkpoint['acc']
-start_epoch = checkpoint['epoch']
+# net.load_state_dict(checkpoint['net'])
+# best_acc = checkpoint['acc']
+# start_epoch = checkpoint['epoch']
 
 # print(checkpoint['net'].keys())
 # sys.exit()
@@ -166,7 +166,7 @@ def test(epoch):
     # Save checkpoint.
     acc = 100.*correct/total
     if acc > best_acc:
-        if epoch > 100:
+        if epoch > 60:
             print('Saving..')
             state = {
                 'net': net.state_dict(),
@@ -175,7 +175,7 @@ def test(epoch):
             }
             if not os.path.isdir('checkpoint'):
                 os.mkdir('checkpoint')
-            torch.save(state, './checkpoint/resnet164test2_1c100_%d.t7'%(epoch))
+            torch.save(state, './checkpoint/sresnet164_2_1yc100_%d.t7'%(epoch))
         best_acc = acc
     
     
@@ -184,8 +184,9 @@ for epoch in range(200):
     
     train(epoch)
     test(epoch)
+    schedule = 50
     
-    if epoch in [50, 100, 150]:
+    if epoch in [schedule, schedule*2, schedule*3]:
         optimizer.param_groups[0]['lr'] /= 10
     
 #     if epoch in [30, 40, 50, 60, 65, 70]:

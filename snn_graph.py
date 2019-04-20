@@ -151,35 +151,37 @@ class ResNet_Cifar(nn.Module):
         
         flow = [x for _ in range(self.device_num)]
         send = [[None, 0, True] for _ in range(self.device_num)]
-#         a = 0
-#         b = 0
-#         while a+1<self.layer_num and b+1<self.layer_num:
-#             print(a)
-#             print(b)
-#             if (a+b)%2==0:
-#                 flow[0] = self.path[0][a+1](self.path[0][a](flow[0]))
-#                 flow[1] = self.path[1][b](flow[1])
-#                 a = a+2
-#                 b = b+1
-#                 t = flow[1]
+        a = 0
+        b = 0
+        while a+1<self.layer_num and b+1<self.layer_num:
+#             print(a, b)
+            if (a+b)%2==0:
+                flow[0] = self.path[0][a+1](self.path[0][a](flow[0]))
+                flow[1] = self.path[1][b](flow[1])
+                a = a+2
+                b = b+1
+                t = flow[1]
 #                 if flow[0].shape!=flow[1].shape:
 #                     p = nn.AvgPool2d(2, stride=2)
 #                     t = p(t)
 #                     t = torch.cat((t, t), 1)
-#                 flow[0] = (flow[0]+t)/2
-#             else:
-#                 flow[1] = self.path[1][b+1](self.path[1][b](flow[1]))
-#                 flow[0] = self.path[0][a](flow[1])
-#                 a = a+1
-#                 b = b+2
-#                 t = flow[0]
+                flow[0] = (flow[0]+t)/2
+            else:
+                flow[1] = self.path[1][b+1](self.path[1][b](flow[1]))
+                flow[0] = self.path[0][a](flow[0])
+                a = a+1
+                b = b+2
+                t = flow[0]
 #                 if flow[0].shape!=flow[1].shape:
 #                     p = nn.AvgPool2d(2, stride=2)
 #                     t = p(t)
 #                     t = torch.cat((t, t), 1)
-#                 flow[1] = (flow[1]+t)/2
-            
+                flow[1] = (flow[1]+t)/2
         
+        flow[1] = self.path[1][b+1](self.path[1][b](flow[1]))
+        flow[0] = self.path[0][a](flow[0])
+        t = flow[0]
+        flow[1] = (flow[1]+t)/2
         
 #         flow[0] = x
 #         for i in range(self.layer_num):
@@ -200,13 +202,14 @@ class ResNet_Cifar(nn.Module):
 #                     if flow[j] is None:
 #                         flow[j] = s[0]
 #                     else:
-#                         if s[0].shape!=flow[j].shape:
-#                             p = nn.AvgPool2d(2, stride=2)
-#                             s[0] = p(s[0])
-#                             s[0] = torch.cat((s[0], s[0]), 1)
-# #                         s[0] = torch.zeros(s[0].shape).cuda('cuda:1')
-#                         flow[j] = flow[j] + s[0]
-#                         flow[j] = flow[j]/2
+#                         if s[0].shape==flow[j].shape:
+# #                             p = nn.AvgPool2d(2, stride=2)
+# #                             s[0] = p(s[0])
+# #                             s[0] = torch.cat((s[0], s[0]), 1)
+                            
+                            
+#                             flow[j] = flow[j] + s[0]
+#                             flow[j] = flow[j]/2
 #                     send[from_device_idx][2] = True
                 
 #                 if flow[j] is not None and send[j][2]:
@@ -215,7 +218,7 @@ class ResNet_Cifar(nn.Module):
 #                     send[j]=[flow[j], i, False]
         
         
-        y = flow[0]
+        y = flow[1]
         y = self.avgpool(y)
         y = y.view(y.size(0), -1)
         y = self.fc(y)
