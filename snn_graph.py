@@ -89,7 +89,7 @@ class ResNet_Cifar(nn.Module):
         self.conv1 = nn.Conv2d(3, 16, kernel_size=3, stride=1, padding=1, bias=False)
         self.bn1 = nn.BatchNorm2d(16)
         self.relu = nn.ReLU(inplace=True)
-        self.device_num = 2
+        self.device_num = 4
         self.layer_num = layers[0]+layers[1]+layers[2]
         self.transmission_time = 0
         self.path = []
@@ -149,56 +149,115 @@ class ResNet_Cifar(nn.Module):
         x = self.bn1(x)
         x = self.relu(x)
         
-        flow = [x for _ in range(self.device_num)]
+        flow = [None for _ in range(self.device_num)]
         send = [[None, 0, True] for _ in range(self.device_num)]
-        a = 0
-        b = 0
-        while a+1<self.layer_num and b+1<self.layer_num:
-#             print(a, b)
-            if (a+b)%2==0:
-                flow[0] = self.path[0][a+1](self.path[0][a](flow[0]))
-                flow[1] = self.path[1][b](flow[1])
-                a = a+2
-                b = b+1
-                t = flow[1]
-#                 if flow[0].shape!=flow[1].shape:
-#                     p = nn.AvgPool2d(2, stride=2)
-#                     t = p(t)
-#                     t = torch.cat((t, t), 1)
-                flow[0] = (flow[0]+t)/2
-            else:
-                flow[1] = self.path[1][b+1](self.path[1][b](flow[1]))
-                flow[0] = self.path[0][a](flow[0])
-                a = a+1
-                b = b+2
-                t = flow[0]
-#                 if flow[0].shape!=flow[1].shape:
-#                     p = nn.AvgPool2d(2, stride=2)
-#                     t = p(t)
-#                     t = torch.cat((t, t), 1)
-                flow[1] = (flow[1]+t)/2
+        send2 = [[None, 0, True] for _ in range(self.device_num)]
+
+#         a = 0
+#         b = 0
+#         while a+1<self.layer_num and b+1<self.layer_num:
+#             tmp = []
+#             flow[0] = self.path[0][a](flow[0])
+#             flow[1] = self.path[1][b](flow[1])
+#             tmp.append(flow[1])
+#             flow[0] = self.path[0][a+1](flow[0])
+#             flow[1] = self.path[1][b+1](flow[1])
+#             flow[0] = (flow[0]+tmp[-1])/2
+#             flow[0] = self.path[0][a+2](flow[0])
+#             flow[1] = self.path[1][b+2](flow[1])
+#             tmp.append(flow[0])
+#             flow[1] = (flow[1]+tmp[-1])/2
+#             a += 3
+#             b += 3
         
-        flow[1] = self.path[1][b+1](self.path[1][b](flow[1]))
-        flow[0] = self.path[0][a](flow[0])
-        t = flow[0]
-        flow[1] = (flow[1]+t)/2
+#         while a+1<self.layer_num and b+1<self.layer_num:
+# #             print(a, b)
+#             if (a+b)%2==0:
+#                 flow[0] = self.path[0][a+1](self.path[0][a](flow[0]))
+#                 flow[1] = self.path[1][b](flow[1])
+#                 a = a+2
+#                 b = b+1
+#                 t = flow[1]
+# #                 if flow[0].shape!=flow[1].shape:
+# #                     p = nn.AvgPool2d(2, stride=2)
+# #                     t = p(t)
+# #                     t = torch.cat((t, t), 1)
+#                 flow[0] = (flow[0]+t)/2
+#             else:
+#                 flow[1] = self.path[1][b+1](self.path[1][b](flow[1]))
+#                 flow[0] = self.path[0][a](flow[0])
+#                 a = a+1
+#                 b = b+2
+#                 t = flow[0]
+# #                 if flow[0].shape!=flow[1].shape:
+# #                     p = nn.AvgPool2d(2, stride=2)
+# #                     t = p(t)
+# #                     t = torch.cat((t, t), 1)
+#                 flow[1] = (flow[1]+t)/2
+#         flow[1] = self.path[1][b+1](self.path[1][b](flow[1]))
+#         flow[0] = self.path[0][a](flow[0])
+#         t = flow[0]
+#         flow[1] = (flow[1]+t)/2
         
+        flow[0] = x
+        for i in range(self.layer_num):
+            tmp = []
+            for j in range(self.device_num):
+                
+                if flow[j] is not None:
+                    flow[j] = self.path[j][i](flow[j])
+                else:
+                    flow[j] = self.path[j][i](x)
+                
+            if i%3==2:
+                send[0]=[flow[0], i, False]
+                s = send[0]
+                flow[1] = flow[1] + s[0]
+                flow[1] = flow[1]/2
+                send[2]=[flow[2], i, False]
+                s = send[2]
+                flow[3] = flow[3] + s[0]
+                flow[3] = flow[3]/2
+            elif i%3==0:
+                send[1]=[flow[1], i, False]
+                send[3]=[flow[3], i, False]
+            elif i%3==1:
+                s = send[1]
+                flow[0] = flow[0] + s[0]
+                flow[0] = flow[0]/2
+                s = send[3]
+                flow[2] = flow[2] + s[0]
+                flow[2] = flow[2]/2
+                
+                
+                
+            if i%3==2:
+                send2[1]=[flow[1], i, False]
+                s = send2[1]
+                flow[2] = flow[2] + s[0]
+                flow[2] = flow[2]/2
+                send2[3]=[flow[3], i, False]
+                s = send2[3]
+                flow[0] = flow[0] + s[0]
+                flow[0] = flow[0]/2
+            elif i%3==0:
+                send2[2]=[flow[2], i, False]
+                send2[0]=[flow[0], i, False]
+            elif i%3==1:
+                s = send2[2]
+                flow[1] = flow[1] + s[0]
+                flow[1] = flow[1]/2
+                s = send2[0]
+                flow[3] = flow[3] + s[0]
+                flow[3] = flow[3]/2
+                
 #         flow[0] = x
 #         for i in range(self.layer_num):
-#             tmp = []
 #             for j in range(self.device_num):
-                
-#                 if flow[j] is not None:
-#                     flow[j] = self.path[j][i](flow[j])
-#                 else:
-#                     flow[j] = self.path[j][i](x)
-                
 #                 from_device_idx = (j+(i%(self.device_num-1)+1))%self.device_num
 #                 s = send[from_device_idx]
                 
 #                 if s is not None and s[0] is not None and s[1]<i-self.transmission_time and not s[2]:
-# #                 if s is not None and s[0] is not None and not s[2]:
-# #                     print(i, j, from_device_idx)
 #                     if flow[j] is None:
 #                         flow[j] = s[0]
 #                     else:
@@ -206,19 +265,15 @@ class ResNet_Cifar(nn.Module):
 # #                             p = nn.AvgPool2d(2, stride=2)
 # #                             s[0] = p(s[0])
 # #                             s[0] = torch.cat((s[0], s[0]), 1)
-                            
-                            
 #                             flow[j] = flow[j] + s[0]
 #                             flow[j] = flow[j]/2
+#                             print(i, s[1], from_device_idx, j)
 #                     send[from_device_idx][2] = True
-                
 #                 if flow[j] is not None and send[j][2]:
-# #                 tmp.append([flow[j], i, False])
-# #             for j in range(self.device_num):
 #                     send[j]=[flow[j], i, False]
         
         
-        y = flow[1]
+        y = flow[2]
         y = self.avgpool(y)
         y = y.view(y.size(0), -1)
         y = self.fc(y)
@@ -234,6 +289,10 @@ def resnet164_cifar(**kwargs):
     model = ResNet_Cifar(Bottleneck, [18, 18, 18], **kwargs)
     return model
 
+# def sresnet164_cifar(**kwargs):
+#     model = ResNet_Cifar(Bottleneck, [9, 9, 9], **kwargs)
+#     return model
+
 def sresnet164_cifar(**kwargs):
-    model = ResNet_Cifar(Bottleneck, [9, 9, 9], **kwargs)
+    model = ResNet_Cifar(Bottleneck, [6, 6, 6], **kwargs)
     return model
