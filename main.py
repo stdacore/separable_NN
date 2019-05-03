@@ -9,7 +9,7 @@ import torch.backends.cudnn as cudnn
 import torchvision
 import torchvision.transforms as transforms
 
-import os, sys
+import os, sys, random
 import argparse
 
 from autoaugment import CIFAR10Policy
@@ -80,7 +80,7 @@ net = net.to(device)
 
 # for p in net.parameters():
 #     print(p.nelement())
-# print(net)
+print(net)
 print(sum(p.numel() for p in net.parameters() if p.requires_grad))
 
 if args.resume:
@@ -89,7 +89,15 @@ if args.resume:
     assert os.path.isdir('checkpoint'), 'Error: no checkpoint directory found!'
     # checkpoint = torch.load('./checkpoint/resnet164_2_1c100_192.t7')
     checkpoint = torch.load('./checkpoint/%s'%args.resume)
-#     for key in checkpoint['net'].keys():
+    for key in checkpoint['net'].keys():
+        if 'layer' in key and 'num_batches_tracked' not in key:
+            x = checkpoint['net'][key]
+            shape = x.shape
+#             shape[0] = shape[0]//4
+#             r = random.randint(0, shape[0]*3)
+            checkpoint['net'][key] = torch.cat([x, x, x, x], 0)
+            tensor = torch.randn(checkpoint['net'][key].shape)/50
+            checkpoint['net'][key] = checkpoint['net'][key].to('cpu')+tensor
 #         substring = key.split('device_')
 #         from_key = substring[0]+'device_1'+substring[1][1:] if len(substring)>=2 else key
 #         if key!=from_key:
