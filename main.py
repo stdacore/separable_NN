@@ -16,6 +16,8 @@ from autoaugment import CIFAR10Policy
 
 # from seperable_net import *
 from snn_graph import *
+from snn_graph_2 import *
+from snn_graph_3 import *
 from utils import progress_bar
 
 
@@ -23,6 +25,7 @@ parser = argparse.ArgumentParser(description='PyTorch CIFAR10 Training')
 parser.add_argument('--lr', default=0.1, type=float, help='learning rate')
 parser.add_argument('--split', default=1, type=int, help='number of devices to split the model')
 parser.add_argument('--epoch', default=200, type=int, help='epoch')
+parser.add_argument('--batch', default=128, type=int, help='batch')
 parser.add_argument('--schedule', default=50, type=int, help='schedule to decay learning rate')
 parser.add_argument('--cuda', default=0, type=int, help='gpu index')
 parser.add_argument('--resume', '-r', default='', type=str, help='checkpoint path to resume')
@@ -62,15 +65,17 @@ transform_test = transforms.Compose([
 ])
 
 trainset = torchvision.datasets.CIFAR100(root='./data', train=True, download=True, transform=transform_train)
-trainloader = torch.utils.data.DataLoader(trainset, batch_size=128, shuffle=True, num_workers=10)
+trainloader = torch.utils.data.DataLoader(trainset, batch_size=args.batch, shuffle=True, num_workers=10)
 
 testset = torchvision.datasets.CIFAR100(root='./data', train=False, download=True, transform=transform_test)
-testloader = torch.utils.data.DataLoader(testset, batch_size=128, shuffle=False, num_workers=10)
+testloader = torch.utils.data.DataLoader(testset, batch_size=args.batch, shuffle=False, num_workers=10)
 
 
 # Model
 print('==> Building model..')
-net = sresnet164_cifar(num_classes=100)
+# net = sresnet164_cifar(num_classes=100)
+net = resneXt_cifar(56, 4, 16, num_classes=100)
+# net = densenet_BC_cifar(100, 12, num_classes=100)
 net = net.to(device)
 
 # for p in net.parameters():
@@ -84,11 +89,11 @@ if args.resume:
     assert os.path.isdir('checkpoint'), 'Error: no checkpoint directory found!'
     # checkpoint = torch.load('./checkpoint/resnet164_2_1c100_192.t7')
     checkpoint = torch.load('./checkpoint/%s'%args.resume)
-    for key in checkpoint['net'].keys():
-        substring = key.split('device_')
-        from_key = substring[0]+'device_1'+substring[1][1:] if len(substring)>=2 else key
-        if key!=from_key:
-            checkpoint['net'][key] = checkpoint['net'][from_key]
+#     for key in checkpoint['net'].keys():
+#         substring = key.split('device_')
+#         from_key = substring[0]+'device_1'+substring[1][1:] if len(substring)>=2 else key
+#         if key!=from_key:
+#             checkpoint['net'][key] = checkpoint['net'][from_key]
 
 
     net.load_state_dict(checkpoint['net'])
