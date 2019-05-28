@@ -42,8 +42,8 @@ print('resume: %s'%args.resume)
 print('save: %s'%args.save)
 print('===== parameter settings =====')
 
-
-device = 'cuda'#'cuda:%d'%args.cuda 
+torch.backends.cudnn.benchmark = True
+device = 'cuda:%d'%args.cuda #'cuda'#
 best_acc = 0  # best test accuracy
 start_epoch = 0  # start from epoch 0 or last checkpoint epoch
 
@@ -74,9 +74,9 @@ testloader = torch.utils.data.DataLoader(testset, batch_size=args.batch, shuffle
 # Model
 print('==> Building model..')
 # net = sresnet164_cifar(num_classes=100)
-net = resneXt_cifar(110, 4, 16, num_classes=100, is_separate=True)
+net = resneXt_cifar(38, 4, 16, num_classes=100, is_separate=True)
 # net = densenet_BC_cifar(250, 24, num_classes=100)
-net = nn.DataParallel(net)
+# net = nn.DataParallel(net)
 net = net.to(device)
 # net2 = resneXt_cifar(56, 1, 16, num_classes=100, is_separate=True)
 # net2 = net2.to(device)

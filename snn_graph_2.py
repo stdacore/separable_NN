@@ -43,13 +43,14 @@ class Bottleneck(nn.Module):
         super(Bottleneck, self).__init__()
         D = int(planes * (baseWidth / (16*separate_coef)))##
         C = cardinality*2
+        C_group = 8
         self.conv1 = nn.Conv2d(inplanes, D*C, kernel_size=1, groups=separate_coef, bias=False)
         self.bn1 = nn.BatchNorm2d(D*C)
-        self.conv2 = nn.Conv2d(D*C, D*C, kernel_size=3, stride=stride, padding=1, groups=C, bias=False)
+        self.conv2 = nn.Conv2d(D*C, D*C, kernel_size=3, stride=stride, padding=1, groups=C_group, bias=False)
         self.bn2 = nn.BatchNorm2d(D*C)
         self.conv3 = nn.Conv2d(D*C, planes*4, kernel_size=1, groups=separate_coef, bias=False)
         self.bn3 = nn.BatchNorm2d(planes*4)
-        self.se = SELayer(planes*4, groups=separate_coef, reduction=4)
+#         self.se = SELayer(planes*4, groups=separate_coef, reduction=4)
 #         self.extract = nn.Sequential(
 #             nn.Conv2d(inplanes, inplanes*4, kernel_size=3, stride=1, padding=1, groups=separate_coef, bias=False),
 #             nn.BatchNorm2d(inplanes*4),
@@ -97,7 +98,7 @@ class Bottleneck(nn.Module):
 
         out = self.conv3(out)
         out = self.bn3(out)
-        out = self.se(out)
+#         out = self.se(out)
 
         if self.downsample is not None:
             residual = self.downsample(x)
@@ -171,7 +172,7 @@ class ResNeXt_Cifar(nn.Module):
 #                         s += 1
                     
                     x = layer(x)
-                    if i%2==0:
+                    if i%1==0:
                         shift = x.shape[1]//device_num*(s%(device_num-1)+1)
                         a = torch.cat([x[:,shift:], x[:,:shift]], 1)
     #                     a = F.avg_pool2d(a, 2, 2)
@@ -179,7 +180,7 @@ class ResNeXt_Cifar(nn.Module):
     #                     a = a.half()
     #                     a = a.float()
                         s += 1
-                    elif i%2==1:
+#                     elif i%2==1:
                         x = (x+a)/2
 
             start = 0*x.shape[1]//device_num
