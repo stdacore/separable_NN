@@ -7,10 +7,46 @@ import os
 import sys
 import time
 import math
+import numpy as np
 
+import torch
 import torch.nn as nn
 import torch.nn.init as init
+import shutil
+def save_args(__file__, args):
+    shutil.copy(os.path.basename(__file__), args.cv_dir)
+    with open(args.cv_dir+'/args.txt','w') as f:
+        f.write(str(args))
 
+def performance_stats(policies, rewards, matches):
+
+    policies = torch.cat(policies, 0)
+    rewards = torch.cat(rewards, 0)
+    accuracy = torch.cat(matches, 0).mean()
+
+    reward = rewards.mean()
+    sparsity = policies.sum(1).mean()
+    variance = policies.sum(1).std()
+
+    policy_set = [p.cpu().numpy().astype(np.int).astype(np.str) for p in policies]
+    policy_set = set([''.join(p) for p in policy_set])
+
+    return accuracy, reward, sparsity, variance, policy_set
+
+class LrScheduler:
+    def __init__(self, optimizer, base_lr, lr_decay_ratio, epoch_step):
+        self.base_lr = base_lr
+        self.lr_decay_ratio = lr_decay_ratio
+        self.epoch_step = epoch_step
+        self.optimizer = optimizer
+
+    def adjust_learning_rate(self, epoch):
+        """Sets the learning rate to the initial LR decayed by 10 every 30 epochs"""
+        lr = self.base_lr * (self.lr_decay_ratio ** (epoch // self.epoch_step))
+        for param_group in self.optimizer.param_groups:
+            param_group['lr'] = lr
+            if epoch%self.epoch_step==0:
+                print ('# setting learning_rate to %.2E'%lr)
 
 def get_mean_and_std(dataset):
     '''Compute the mean and std value of dataset.'''
@@ -122,3 +158,18 @@ def format_time(seconds):
     if f == '':
         f = '0ms'
     return f
+
+def performance_stats(policies, rewards, matches):
+
+    policies = torch.cat(policies, 0)
+    rewards = torch.cat(rewards, 0)
+    accuracy = torch.cat(matches, 0).mean()
+
+    reward = rewards.mean()
+    sparsity = policies.sum(1).mean()
+    variance = policies.sum(1).std()
+
+    policy_set = [p.cpu().numpy().astype(np.int).astype(np.str) for p in policies]
+    policy_set = set([''.join(p) for p in policy_set])
+
+    return accuracy, reward, sparsity, variance, policy_set
