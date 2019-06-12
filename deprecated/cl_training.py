@@ -17,7 +17,7 @@ from snn_graph_3 import *
 
 import torch.backends.cudnn as cudnn
 cudnn.benchmark = True
-
+from autoaugment import CIFAR10Policy
 
 import argparse
 parser = argparse.ArgumentParser(description='BlockDrop Training')
@@ -192,7 +192,7 @@ def test(epoch):
 transform_train = transforms.Compose([
     transforms.RandomCrop(32, padding=4),
     transforms.RandomHorizontalFlip(),
-#     CIFAR10Policy(),
+    CIFAR10Policy(),
     transforms.ToTensor(),
     transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
 ])
@@ -209,10 +209,10 @@ testset = torchvision.datasets.CIFAR100(root='./data', train=False, download=Tru
 testloader = torch.utils.data.DataLoader(testset, batch_size=args.batch_size, shuffle=False, num_workers=10)
 
 
-rnet = resneXt_cifar(56, 4, 16, num_classes=100, is_separate=False)
+rnet = resneXt_cifar(56, 4, 16, num_classes=100, is_separate=True)
 agent = Policy32([1,1,1], num_blocks=18)
 
-checkpoint = torch.load('./checkpoint/resnext_56_4_16_171.t7')
+checkpoint = torch.load('./checkpoint/resnext_56_4_16_config1_170.t7')#resnext_56_4_16_171.t7')
 rnet.load_state_dict(checkpoint['net'])
 
 # rnet, agent = utils.get_model(args.model)
@@ -244,7 +244,7 @@ for epoch in range(start_epoch, start_epoch+args.max_epochs+1):
     else:
         args.cl_step = num_blocks
 
-    print ('training the last %d blocks ...' % args.cl_step)
+#     print ('training the last %d blocks ...' % args.cl_step)
     train(epoch)
 
     if epoch % 10 == 0:

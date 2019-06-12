@@ -8,7 +8,6 @@ import torch.nn.functional as F
 import torch.backends.cudnn as cudnn
 import torchvision
 import torchvision.transforms as transforms
-from tensorboard_logger import configure, log_value
 
 import os, sys, random
 import argparse
@@ -16,9 +15,9 @@ import argparse
 from autoaugment import CIFAR10Policy
 
 # from seperable_net import *
-# from snn_graph import *
+from snn_graph import *
 from snn_graph_2 import *
-# from snn_graph_3 import *
+from snn_graph_3 import *
 from utils import progress_bar
 
 
@@ -28,7 +27,7 @@ parser.add_argument('--split', default=1, type=int, help='number of devices to s
 parser.add_argument('--epoch', default=200, type=int, help='epoch')
 parser.add_argument('--batch', default=128, type=int, help='batch')
 parser.add_argument('--schedule', default=50, type=int, help='schedule to decay learning rate')
-parser.add_argument('--cuda', default=-1, type=int, help='gpu index')
+parser.add_argument('--cuda', default=0, type=int, help='gpu index')
 parser.add_argument('--resume', '-r', default='', type=str, help='checkpoint path to resume')
 parser.add_argument('--save', default='exp', type=str, help='checkpoint path to save')
 args = parser.parse_args()
@@ -44,10 +43,7 @@ print('save: %s'%args.save)
 print('===== parameter settings =====')
 
 torch.backends.cudnn.benchmark = True
-if args.cuda==-1:
-    device = 'cuda'
-else:
-    device = 'cuda:%d'%args.cuda #'cuda'#
+device = 'cuda:%d'%args.cuda #'cuda'#
 best_acc = 0  # best test accuracy
 start_epoch = 0  # start from epoch 0 or last checkpoint epoch
 
@@ -78,10 +74,9 @@ testloader = torch.utils.data.DataLoader(testset, batch_size=args.batch, shuffle
 # Model
 print('==> Building model..')
 # net = sresnet164_cifar(num_classes=100)
-net = resneXt_cifar(110, 4, 16, num_classes=100, is_separate=True)
+net = resneXt_cifar(38, 4, 16, num_classes=100, is_separate=True)
 # net = densenet_BC_cifar(250, 24, num_classes=100)
-if args.cuda==-1:
-    net = nn.DataParallel(net)
+# net = nn.DataParallel(net)
 net = net.to(device)
 # net2 = resneXt_cifar(56, 1, 16, num_classes=100, is_separate=True)
 # net2 = net2.to(device)
@@ -101,12 +96,12 @@ if args.resume:
 
     print('==> Resuming from checkpoint..')
     assert os.path.isdir('checkpoint'), 'Error: no checkpoint directory found!'
-    checkpoint = torch.load('./checkpoint/%s'%args.resume)
-#     checkpoint = torch.load('./checkpoint/resnext_56_1_16_167.t7')
-#     checkpoint2 = torch.load('./checkpoint/resnext_56_1_16_re2_198.t7')
-#     checkpoint5 = torch.load('./checkpoint/resnext_56_1_16_re5_157.t7')
-#     checkpoint3 = torch.load('./checkpoint/resnext_56_1_16_re3_155.t7')
-#     checkpoint4 = torch.load('./checkpoint/resnext_56_1_16_re4_159.t7')
+#     checkpoint = torch.load('./checkpoint/%s'%args.resume)
+    checkpoint = torch.load('./checkpoint/resnext_56_1_16_167.t7')
+    checkpoint2 = torch.load('./checkpoint/resnext_56_1_16_re2_198.t7')
+    checkpoint5 = torch.load('./checkpoint/resnext_56_1_16_re5_157.t7')
+    checkpoint3 = torch.load('./checkpoint/resnext_56_1_16_re3_155.t7')
+    checkpoint4 = torch.load('./checkpoint/resnext_56_1_16_re4_159.t7')
     
 #     for key in checkpoint['net'].keys():
 #         if 'layer' in key and 'num_batches_tracked' not in key:
@@ -125,10 +120,10 @@ if args.resume:
 
 
     net.load_state_dict(checkpoint['net'])
-#     net2.load_state_dict(checkpoint2['net'])
-#     net3.load_state_dict(checkpoint3['net'])
-#     net4.load_state_dict(checkpoint4['net'])
-#     net5.load_state_dict(checkpoint5['net'])
+    net2.load_state_dict(checkpoint2['net'])
+    net3.load_state_dict(checkpoint3['net'])
+    net4.load_state_dict(checkpoint4['net'])
+    net5.load_state_dict(checkpoint5['net'])
     best_acc = checkpoint['acc']
     start_epoch = checkpoint['epoch']
 
@@ -162,8 +157,6 @@ def train(epoch):
 
         progress_bar(batch_idx, len(trainloader), 'Loss: %.3f | Acc: %.3f%% (%d/%d)'
             % (train_loss/(batch_idx+1), 100.*correct/total, correct, total))
-    log_value('train_loss', train_loss/(batch_idx+1), epoch)
-    log_value('train_accuracy', correct/total, epoch)
 
 def test(epoch):
     global best_acc
@@ -189,8 +182,6 @@ def test(epoch):
 
             progress_bar(batch_idx, len(testloader), 'Loss: %.3f | Acc: %.3f%% (%d/%d)'
                 % (test_loss/(batch_idx+1), 100.*correct/total, correct, total))
-    log_value('test_loss', test_loss/(batch_idx+1), epoch)
-    log_value('test_accuracy', correct/total, epoch)
 
     # Save checkpoint.
     acc = 100.*correct/total
@@ -208,11 +199,10 @@ def test(epoch):
             torch.save(state, './checkpoint/%s_%d.t7'%(args.save, epoch))
             net.to(device)
         best_acc = acc
-
-configure('cv/'+args.save+'/log', flush_secs=5)
+        
 for epoch in range(args.epoch):
     
-#     train(epoch)
+    train(epoch)
     test(epoch)
     schedule = args.schedule
     

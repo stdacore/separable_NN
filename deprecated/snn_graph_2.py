@@ -3,20 +3,66 @@ import torch.nn as nn
 import torch.nn.functional as F
 import math
 
+# class GroupBN(nn.Module):
+#     def __init__(self, group, planes):
+#         super(GroupBN, self).__init__()
+#         self.group = group
+#         self.planes = planes
+#         for i in range(self.group):
+#             setattr(self, 'self.bn%d'%(i+1), nn.BatchNorm2d(planes//group))
+#     def forward(self, x):
+#         slot = self.planes//self.group
+#         for i in range(self.group):
+#             x[:, i*slot:(i+1)*slot] = getattr(self, 'self.bn%d'%(i+1))(x[:, i*slot:(i+1)*slot])
+#         return x
+
+class SELayer(nn.Module):
+    def __init__(self, channel, groups, reduction=16):
+        super(SELayer, self).__init__()
+        self.avg_pool = nn.AdaptiveAvgPool2d(1)
+        self.fc = nn.Sequential(
+                nn.Conv1d(channel, channel // reduction, kernel_size=1, groups=groups, bias=False),
+                nn.ReLU(inplace=True),
+                nn.Conv1d(channel // reduction, channel, kernel_size=1, groups=groups, bias=False),
+                nn.Sigmoid()
+        )
+#         self.se_weight = []
+
+    def forward(self, x):
+        b, c, _, _ = x.size()
+        y = self.avg_pool(x).view(b, c, 1)
+        y = self.fc(y).view(b, c, 1, 1)
+#         self.se_weight.append(y.view(b, c)) # only use for excitation observation
+        return x * y
+
+
 class Bottleneck(nn.Module):
     expansion = 4
 
     def __init__(self, inplanes, planes, cardinality, baseWidth, stride=1, downsample=None, separate_coef=1):
         super(Bottleneck, self).__init__()
         D = int(planes * (baseWidth / (16*separate_coef)))##
-        C = cardinality *2
-        C_group = 8#32#
+        C = cardinality*2
+        C_group = 8
         self.conv1 = nn.Conv2d(inplanes, D*C, kernel_size=1, groups=separate_coef, bias=False)
         self.bn1 = nn.BatchNorm2d(D*C)
         self.conv2 = nn.Conv2d(D*C, D*C, kernel_size=3, stride=stride, padding=1, groups=C_group, bias=False)
         self.bn2 = nn.BatchNorm2d(D*C)
         self.conv3 = nn.Conv2d(D*C, planes*4, kernel_size=1, groups=separate_coef, bias=False)
         self.bn3 = nn.BatchNorm2d(planes*4)
+#         self.se = SELayer(planes*4, groups=separate_coef, reduction=4)
+#         self.extract = nn.Sequential(
+#             nn.Conv2d(inplanes, inplanes*4, kernel_size=3, stride=1, padding=1, groups=separate_coef, bias=False),
+#             nn.BatchNorm2d(inplanes*4),
+#             nn.ReLU(inplace=True),
+#             nn.PixelShuffle(2)
+#         )
+#         self.extract = nn.Sequential(
+#             nn.ConvTranspose2d(inplanes, inplanes, kernel_size=2, stride=2, padding=0, groups=separate_coef, bias=False),
+#             nn.BatchNorm2d(inplanes),
+#             nn.ReLU(inplace=True),
+#         )
+#         self.compress = nn.AvgPool2d(2)
 
         self.relu = nn.ReLU(inplace=True)
         self.downsample = downsample
@@ -37,7 +83,10 @@ class Bottleneck(nn.Module):
 #         shift = out.shape[1]//4*(y%(4-1)+1)
 #         y = torch.cat([out[:,shift:], out[:,:shift]], 1)
 #         out = (out+y)/2
-
+#         shift = out.shape[1]//4*(y%(4-1)+1)
+#         y = torch.cat([out[:,shift:], out[:,:shift]], 1)
+#         out = (out+y)/2
+        
 #         if y is None:
 #             y = out
 #         else:
@@ -46,8 +95,10 @@ class Bottleneck(nn.Module):
 #             out = (out+y)/2
 #             y = None
 
+
         out = self.conv3(out)
         out = self.bn3(out)
+#         out = self.se(out)
 
         if self.downsample is not None:
             residual = self.downsample(x)
@@ -57,7 +108,7 @@ class Bottleneck(nn.Module):
         out += residual
         out = self.relu(out)
         
-        return out#, y
+        return out
 
 
 class ResNeXt_Cifar(nn.Module):
@@ -113,7 +164,7 @@ class ResNeXt_Cifar(nn.Module):
             for stage in [self.layer1, self.layer2, self.layer3]:
                 y = None
                 for i, layer in enumerate(list(stage.modules())[0]):
-#                     x = layer(x, s)
+#                     x, y = layer(x, s)
 #                     s += 1
 #                     if y is not None:
 #                         shift = y.shape[1]//device_num*(s%(device_num-1)+1)
@@ -121,11 +172,15 @@ class ResNeXt_Cifar(nn.Module):
 #                         s += 1
                     
                     x = layer(x)
-                    if i%2==0:
+                    if i%1==0:
                         shift = x.shape[1]//device_num*(s%(device_num-1)+1)
                         a = torch.cat([x[:,shift:], x[:,:shift]], 1)
+    #                     a = F.avg_pool2d(a, 2, 2)
+    #                     a = F.interpolate(a, x.shape[2:])
+    #                     a = a.half()
+    #                     a = a.float()
                         s += 1
-                    elif i%2==1:
+#                     elif i%2==1:
                         x = (x+a)/2
 
             start = 0*x.shape[1]//device_num

@@ -100,11 +100,10 @@ class Bottleneck(nn.Module):
         out = self.relu(out)
         
         
-        p = torch.zeros(out.shape[0], out.shape[1]).cuda()
-        p = p+policy.view(-1, 1)
-        p = p.view(out.shape[0], out.shape[1], 1, 1)
-        out = out*p + residual*(1-p)
-#         print(out[:10])
+#         p = torch.zeros(out.shape[0], out.shape[1]).cuda()
+#         p = p+policy.view(-1, 1)
+#         p = p.view(out.shape[0], out.shape[1], 1, 1)
+#         out = out*p + residual*(1-p)
         
         
         return out#, y
@@ -156,58 +155,57 @@ class ResNeXt_Cifar(nn.Module):
         x = self.bn1(x)
         x = self.relu(x)
         
-        if True:#self.separate_coef>1:
-#             x = torch.cat([x for _ in range(self.cardinality)], 1)
-#             device_num = self.cardinality
+        if self.separate_coef>1:
+            x = torch.cat([x for _ in range(self.cardinality)], 1)
+            device_num = self.cardinality
             s = 0
             for k, stage in enumerate([self.layer1, self.layer2, self.layer3]):
                 y = None
-#                 p = None
                 for i, layer in enumerate(list(stage.modules())[0]):
                     
-                    x = layer(x, s, policy[:,s])
-#                     if y is not None:
-#                         shift = y.shape[1]//device_num*(s%(device_num-1)+1)
-#                         y = torch.cat([y[:,shift:], y[:,:shift]], 1)
-#                         if policy is not None:
-#                             p = torch.zeros(y.shape[0], y.shape[1]).cuda()
-#                             p = p+policy[:,3*k+i//2].view(-1, 1)
-#                             p = p.view(y.shape[0], y.shape[1], 1, 1)
-# #                             p = torch.ones(y.shape[0], y.shape[1], 1, 1).cuda()
-                    s += 1
+#                     x = layer(x, s, policy[:,s])
+# #                     if y is not None:
+# #                         shift = y.shape[1]//device_num*(s%(device_num-1)+1)
+# #                         y = torch.cat([y[:,shift:], y[:,:shift]], 1)
+# #                         if policy is not None:
+# #                             p = torch.zeros(y.shape[0], y.shape[1]).cuda()
+# #                             p = p+policy[:,3*k+i//2].view(-1, 1)
+# #                             p = p.view(y.shape[0], y.shape[1], 1, 1)
+# # #                             p = torch.ones(y.shape[0], y.shape[1], 1, 1).cuda()
+#                     s += 1
 
                     
                     
                     
                     
-#                     x = layer(x)
-#                     if i%2==0:
-#                         shift = x.shape[1]//device_num*(s%(device_num-1)+1)
-#                         a = torch.cat([x[:,shift:], x[:,:shift]], 1)
-#                         if policy is not None:
-#                             p = torch.zeros(x.shape[0], x.shape[1]//device_num).cuda()
-#                             p = p+policy[:,3*k+i//2].view(-1, 1)
-# #                             q = torch.zeros(x.shape[0], x.shape[1]//device_num//2).cuda()
-# #                             q = q+policy[:,3*k+i//2].view(-1, 1)
-# #                             p = torch.cat([p, q], 1)
-# #                             p = torch.tensor([[i for i in range(x.shape[1]//device_num)] for j in range(x.shape[0])]).cuda()
-# #                             p = p/(x.shape[1]//device_num)
-# #                             po = (policy[:,i].view(-1, 1)*2+policy[:,i+9].view(-1, 1))*0.34
-# #                             p = torch.floor(p.to(torch.float)+po)
-# #                             print(p)
+                    x = layer(x)
+                    if i%2==0:
+                        shift = x.shape[1]//device_num*(s%(device_num-1)+1)
+                        a = torch.cat([x[:,shift:], x[:,:shift]], 1)
+                        if policy is not None:
+                            p = torch.zeros(x.shape[0], x.shape[1]//device_num//2).cuda()
+                            p = p+policy[:,6*k+i].view(-1, 1)
+                            q = torch.zeros(x.shape[0], x.shape[1]//device_num//2).cuda()
+                            q = q+policy[:,6*k+i+1].view(-1, 1)
+                            p = torch.cat([p, q], 1)
+#                             p = torch.tensor([[i for i in range(x.shape[1]//device_num)] for j in range(x.shape[0])]).cuda()
+#                             p = p/(x.shape[1]//device_num)
+#                             po = (policy[:,i].view(-1, 1)*2+policy[:,i+9].view(-1, 1))*0.34
+#                             p = torch.floor(p.to(torch.float)+po)
+#                             print(p)
                             
-#                             p = torch.cat([p for _ in range(device_num)], 1)
-#                             p = p.view(x.shape[0], x.shape[1], 1, 1)
-# #                             p = torch.ones(x.shape[0], x.shape[1], 1, 1).cuda()
-# #                             a = a*p
-#                         s += 1
-#                     elif i%2==1:
-#                         x = (x+x*(1-p)+a*p)/2
+                            p = torch.cat([p for _ in range(device_num)], 1)
+                            p = p.view(x.shape[0], x.shape[1], 1, 1)
+#                             p = torch.ones(x.shape[0], x.shape[1], 1, 1).cuda()
+                            a = a*p
+                        s += 1
+                    elif i%2==1:
+                        x = (x+x*(1-p)+a*p)/2
             
 
-#             start = 0*x.shape[1]//device_num
-#             end = 1*x.shape[1]//device_num
-#             x = x[:,start:end]
+            start = 0*x.shape[1]//device_num
+            end = 1*x.shape[1]//device_num
+            x = x[:,start:end]
         
         else:
             x = self.layer1(x)

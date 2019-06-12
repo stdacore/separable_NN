@@ -12,33 +12,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.init as init
-from torch.autograd import Variable
 import shutil
-from collections import defaultdict
-
-def get_variable(inputs, cuda=False, **kwargs):
-    if type(inputs) in [list, np.ndarray]:
-        inputs = torch.Tensor(inputs)
-        
-    if cuda==-1:
-        out = Variable(inputs.cuda(), **kwargs)
-    else:
-        out = Variable(inputs.to('cuda:%d'%cuda), **kwargs)
-#     if cuda:
-#         out = Variable(inputs.cuda(), **kwargs)
-#     else:
-#         out = Variable(inputs, **kwargs)
-    return out
-
-class keydefaultdict(defaultdict):
-    def __missing__(self, key):
-        if self.default_factory is None:
-            raise KeyError(key)
-        else:
-            ret = self[key] = self.default_factory(key)
-            return ret
-
-
 def save_args(__file__, args):
     shutil.copy(os.path.basename(__file__), args.cv_dir)
     with open(args.cv_dir+'/args.txt','w') as f:

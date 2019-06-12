@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import math
+from itertools import permutations
 
 class Bottleneck(nn.Module):
     expansion = 4
@@ -9,8 +10,8 @@ class Bottleneck(nn.Module):
     def __init__(self, inplanes, planes, cardinality, baseWidth, stride=1, downsample=None, separate_coef=1):
         super(Bottleneck, self).__init__()
         D = int(planes * (baseWidth / (16*separate_coef)))##
-        C = cardinality *2
-        C_group = 8#32#
+        C = cardinality*2
+        C_group = 4*2
         self.conv1 = nn.Conv2d(inplanes, D*C, kernel_size=1, groups=separate_coef, bias=False)
         self.bn1 = nn.BatchNorm2d(D*C)
         self.conv2 = nn.Conv2d(D*C, D*C, kernel_size=3, stride=stride, padding=1, groups=C_group, bias=False)
@@ -33,18 +34,6 @@ class Bottleneck(nn.Module):
         out = self.conv2(out)
         out = self.bn2(out)
         out = self.relu(out)
-        
-#         shift = out.shape[1]//4*(y%(4-1)+1)
-#         y = torch.cat([out[:,shift:], out[:,:shift]], 1)
-#         out = (out+y)/2
-
-#         if y is None:
-#             y = out
-#         else:
-#             if y.shape!=out.shape:
-#                 y = F.avg_pool2d(y, 2, 2)
-#             out = (out+y)/2
-#             y = None
 
         out = self.conv3(out)
         out = self.bn3(out)
@@ -57,7 +46,7 @@ class Bottleneck(nn.Module):
         out += residual
         out = self.relu(out)
         
-        return out#, y
+        return out
 
 
 class ResNeXt_Cifar(nn.Module):
@@ -76,7 +65,10 @@ class ResNeXt_Cifar(nn.Module):
         self.layer3 = self._make_layer(block, 16*self.separate_coef*4, layers[2], stride=2)##
         self.avgpool = nn.AvgPool2d(8, stride=1)
         self.fc = nn.Linear(64 * block.expansion, num_classes)##
-
+        
+        self.decision = list(permutations([0,1,2,3]))
+        
+        
         for m in self.modules():
             if isinstance(m, nn.Conv2d):
                 n = m.kernel_size[0] * m.kernel_size[1] * m.out_channels
@@ -101,7 +93,7 @@ class ResNeXt_Cifar(nn.Module):
         
         return nn.Sequential(*layers)
 
-    def forward(self, x):
+    def forward(self, x, policy=None):
         x = self.conv1(x)
         x = self.bn1(x)
         x = self.relu(x)
@@ -113,17 +105,16 @@ class ResNeXt_Cifar(nn.Module):
             for stage in [self.layer1, self.layer2, self.layer3]:
                 y = None
                 for i, layer in enumerate(list(stage.modules())[0]):
-#                     x = layer(x, s)
-#                     s += 1
-#                     if y is not None:
-#                         shift = y.shape[1]//device_num*(s%(device_num-1)+1)
-#                         y = torch.cat([y[:,shift:], y[:,:shift]], 1)
-#                         s += 1
-                    
                     x = layer(x)
                     if i%2==0:
-                        shift = x.shape[1]//device_num*(s%(device_num-1)+1)
-                        a = torch.cat([x[:,shift:], x[:,:shift]], 1)
+                        if policy is not None:
+                            chunk = torch.split(x, x.size(1)//device_num, 1)
+                            d = self.decision[policy[s]]
+                            a = torch.cat([chunk[k] for k in d], 1)
+                        else:
+                            print("no policy...")
+                            shift = x.shape[1]//device_num*(s%(device_num-1)+1)
+                            a = torch.cat([x[:,shift:], x[:,:shift]], 1)
                         s += 1
                     elif i%2==1:
                         x = (x+a)/2
@@ -152,8 +143,3 @@ def resneXt_cifar(depth, cardinality, baseWidth, **kwargs):
     return model
 
 
-if __name__ == '__main__':
-    net = resneXt_cifar(29, 16, 64)
-    y = net(torch.randn(1, 3, 32, 32))
-    print(net)
-    print(y.size())
