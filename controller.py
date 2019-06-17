@@ -23,17 +23,19 @@ class Controller(torch.nn.Module):
 #         args.cuda = True
         self.args = args
         self.controller_hid = 100
-        self.num_tokens = [24, 18]###
+        self.num_tokens = [9, 24, 9]###
 
-        num_total_tokens = self.num_tokens[0]
+        num_total_tokens = self.num_tokens[1]
 
         self.encoder = torch.nn.Embedding(num_total_tokens, self.controller_hid)
         self.lstm = torch.nn.LSTMCell(self.controller_hid, self.controller_hid)
 
         self.decoders = []
 
-        for i in range(self.num_tokens[1]):
-            decoder = torch.nn.Linear(self.controller_hid, self.num_tokens[0])
+        for i in range(self.num_tokens[0]):
+            decoder = torch.nn.Linear(self.controller_hid, self.num_tokens[1])
+            self.decoders.append(decoder)
+            decoder = torch.nn.Linear(self.controller_hid, self.num_tokens[2])
             self.decoders.append(decoder)
 
         self._decoders = torch.nn.ModuleList(self.decoders)
@@ -88,48 +90,81 @@ class Controller(torch.nn.Module):
         inputs = self.static_inputs[batch_size]
         hidden = self.static_init_hidden[batch_size]
 
-#         activations = []
         entropies = []
         log_probs = []
-#         prev_nodes = []
         policy = []
-        # NOTE(brendan): The RNN controller alternately outputs an activation,
-        # followed by a previous node, for each block except the last one,
-        # which only gets an activation function. The last node is the output
-        # node, and its previous node is the average of all leaf nodes.
-        for block_idx in range(18):###
+        
+#         for block_idx in range(self.num_tokens[0]):###
+#             logits, hidden = self.forward(inputs,
+#                                           hidden,
+#                                           block_idx,
+#                                           is_embed=(block_idx == 0),
+#                                           is_train=(True and is_train))
+
+#             probs = F.softmax(logits, dim=-1)
+#             log_prob = F.log_softmax(logits, dim=-1)
+
+#             entropy = -(log_prob * probs).sum(1, keepdim=False)
+
+#             action = probs.multinomial(num_samples=1).data
+#             policy.append(action.item())
+#             selected_log_prob = log_prob.gather(
+#                 1, utils.get_variable(action, self.args.cuda, requires_grad=False))
+
+#             entropies.append(entropy)
+#             log_probs.append(selected_log_prob[:, 0])
+
+#             inputs = utils.get_variable(action[:, 0], self.args.cuda, requires_grad=False)
+        
+        
+        for block_idx in range(self.num_tokens[0]):
+            block_policy = []
+            ### sample transmission policy
             logits, hidden = self.forward(inputs,
                                           hidden,
-                                          block_idx,
+                                          block_idx*2,
                                           is_embed=(block_idx == 0),
                                           is_train=(True and is_train))
 
             probs = F.softmax(logits, dim=-1)
             log_prob = F.log_softmax(logits, dim=-1)
-            # TODO(brendan): .mean() for entropy?
+
             entropy = -(log_prob * probs).sum(1, keepdim=False)
 
             action = probs.multinomial(num_samples=1).data
-            policy.append(action.item())
+            block_policy.append(action.item())
             selected_log_prob = log_prob.gather(
                 1, utils.get_variable(action, self.args.cuda, requires_grad=False))
 
-            # TODO(brendan): why the [:, 0] here? Should it be .squeeze(), or
-            # .view()? Same below with `action`.
             entropies.append(entropy)
             log_probs.append(selected_log_prob[:, 0])
 
-            # 0: function, 1: previous node
-#             mode = block_idx % 2
             inputs = utils.get_variable(action[:, 0], self.args.cuda, requires_grad=False)
+            
+            ### sample reduction policy
+            logits, hidden = self.forward(inputs,
+                                          hidden,
+                                          block_idx*2+1,
+                                          is_embed=False,
+                                          is_train=(True and is_train))
 
-#             if mode == 0:
-#                 activations.append(action[:, 0])
-#             elif mode == 1:
-#                 prev_nodes.append(action[:, 0])
+            probs = F.softmax(logits, dim=-1)
+            log_prob = F.log_softmax(logits, dim=-1)
 
-#         prev_nodes = torch.stack(prev_nodes).transpose(0, 1)
-#         activations = torch.stack(activations).transpose(0, 1)
+            entropy = -(log_prob * probs).sum(1, keepdim=False)
+
+            action = probs.multinomial(num_samples=1).data
+            block_policy.append(action.item())
+            selected_log_prob = log_prob.gather(
+                1, utils.get_variable(action, self.args.cuda, requires_grad=False))
+
+            entropies.append(entropy)
+            log_probs.append(selected_log_prob[:, 0])
+
+            inputs = utils.get_variable(action[:, 0], self.args.cuda, requires_grad=False)
+            
+            policy.append(block_policy)
+
         if with_details:
             return policy, torch.cat(log_probs), torch.cat(entropies)
 

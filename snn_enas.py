@@ -10,8 +10,8 @@ class Bottleneck(nn.Module):
     def __init__(self, inplanes, planes, cardinality, baseWidth, stride=1, downsample=None, separate_coef=1):
         super(Bottleneck, self).__init__()
         D = int(planes * (baseWidth / (16*separate_coef)))##
-        C = cardinality*2
-        C_group = 4*2
+        C = cardinality*4
+        C_group = 64
         self.conv1 = nn.Conv2d(inplanes, D*C, kernel_size=1, groups=separate_coef, bias=False)
         self.bn1 = nn.BatchNorm2d(D*C)
         self.conv2 = nn.Conv2d(D*C, D*C, kernel_size=3, stride=stride, padding=1, groups=C_group, bias=False)
@@ -67,7 +67,8 @@ class ResNeXt_Cifar(nn.Module):
         self.fc = nn.Linear(64 * block.expansion, num_classes)##
         
         self.decision = list(permutations([0,1,2,3]))
-        
+#         self.decision = [self.decision[i] for i in [7, 9, 10, 13, 16, 17, 18, 22, 23]]
+#         print(self.decision)
         
         for m in self.modules():
             if isinstance(m, nn.Conv2d):
@@ -108,9 +109,16 @@ class ResNeXt_Cifar(nn.Module):
                     x = layer(x)
                     if i%2==0:
                         if policy is not None:
-                            chunk = torch.split(x, x.size(1)//device_num, 1)
-                            d = self.decision[policy[s]]
-                            a = torch.cat([chunk[k] for k in d], 1)
+                            if type(policy[s])==list:
+                                chunk = torch.split(x, x.size(1)//device_num, 1)
+                                for j in chunk:
+                                    j[:, j.size(1)//16*(policy[s][1]+8):]=0
+                                d = self.decision[policy[s][0]]
+                                a = torch.cat([chunk[k] for k in d], 1)
+                            else:
+                                chunk = torch.split(x, x.size(1)//device_num, 1)
+                                d = self.decision[policy[s]]
+                                a = torch.cat([chunk[k] for k in d], 1)
                         else:
                             print("no policy...")
                             shift = x.shape[1]//device_num*(s%(device_num-1)+1)

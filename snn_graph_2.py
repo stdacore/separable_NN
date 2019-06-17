@@ -9,8 +9,8 @@ class Bottleneck(nn.Module):
     def __init__(self, inplanes, planes, cardinality, baseWidth, stride=1, downsample=None, separate_coef=1):
         super(Bottleneck, self).__init__()
         D = int(planes * (baseWidth / (16*separate_coef)))##
-        C = cardinality *2
-        C_group = 8#32#
+        C = cardinality *4
+        C_group = 64#32#
         self.conv1 = nn.Conv2d(inplanes, D*C, kernel_size=1, groups=separate_coef, bias=False)
         self.bn1 = nn.BatchNorm2d(D*C)
         self.conv2 = nn.Conv2d(D*C, D*C, kernel_size=3, stride=stride, padding=1, groups=C_group, bias=False)

@@ -22,7 +22,7 @@ from utils import progress_bar
 parser = argparse.ArgumentParser(description='PyTorch CIFAR10 Training')
 parser.add_argument('--lr', default=0.0001, type=float, help='learning rate')
 parser.add_argument('--split', default=4, type=int, help='number of devices to split the model')
-parser.add_argument('--epoch', default=100, type=int, help='epoch')
+parser.add_argument('--epoch', default=45, type=int, help='epoch')
 parser.add_argument('--batch', default=128, type=int, help='batch')
 parser.add_argument('--schedule', default=50, type=int, help='schedule to decay learning rate')
 parser.add_argument('--cuda', default=-1, type=int, help='gpu index')
@@ -72,12 +72,12 @@ testloader = torch.utils.data.DataLoader(testset, batch_size=args.batch, shuffle
 
 # Model
 print('==> Building model..')
-net = resneXt_cifar(110, 4, 16, num_classes=100, is_separate=True)
+net = resneXt_cifar(56, 4, 16, num_classes=100, is_separate=True)
 if args.cuda==-1:
     net = nn.DataParallel(net)
 net = net.to(device)
 
-print(net)
+# print(net)
 print(sum(p.numel() for p in net.parameters() if p.requires_grad))
 
 if args.resume:

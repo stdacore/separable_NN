@@ -78,7 +78,7 @@ testloader = torch.utils.data.DataLoader(testset, batch_size=args.batch, shuffle
 # Model
 print('==> Building model..')
 # net = sresnet164_cifar(num_classes=100)
-net = resneXt_cifar(110, 4, 16, num_classes=100, is_separate=True)
+net = resneXt_cifar(56, 4, 16, num_classes=100, is_separate=True)
 # net = densenet_BC_cifar(250, 24, num_classes=100)
 if args.cuda==-1:
     net = nn.DataParallel(net)

@@ -22,7 +22,7 @@ from controller import Controller
 parser = argparse.ArgumentParser(description='PyTorch CIFAR10 Training')
 parser.add_argument('--lr', default=0.001, type=float, help='learning rate')
 parser.add_argument('--split', default=1, type=int, help='number of devices to split the model')
-parser.add_argument('--epoch', default=200, type=int, help='epoch')
+parser.add_argument('--epoch', default=70, type=int, help='epoch')
 parser.add_argument('--batch', default=128, type=int, help='batch')
 parser.add_argument('--schedule', default=50, type=int, help='schedule to decay learning rate')
 parser.add_argument('--cstep', default=500, type=int, help='controller update steps per epoch')
@@ -68,12 +68,12 @@ trainloader = torch.utils.data.DataLoader(trainset, batch_size=args.batch, shuff
 validloader = torch.utils.data.DataLoader(validset, batch_size=args.batch, shuffle=True, num_workers=10)
 
 testset = torchvision.datasets.CIFAR100(root='./data', train=False, download=True, transform=transform_test)
-testloader = torch.utils.data.DataLoader(testset, batch_size=500, shuffle=False, num_workers=10)
+testloader = torch.utils.data.DataLoader(testset, batch_size=500, shuffle=True, num_workers=10)
 
 
 # Model
 print('==> Building model..')
-net = resneXt_cifar(110, 4, 16, num_classes=100, is_separate=True)
+net = resneXt_cifar(56, 4, 16, num_classes=100, is_separate=True)
 print(net)
 print(sum(p.numel() for p in net.parameters() if p.requires_grad))
 
@@ -107,6 +107,8 @@ if args.resume:
 #     controller = nn.DataParallel(controller)
 controller = controller.to(device)
 
+# checkpoint = torch.load('./checkpoint/enas_resnext56_64x4d_2_60_0.848.t7')
+# net.load_state_dict(checkpoint['net'])
 
 # Training
 def train_shared(epoch):
@@ -119,6 +121,7 @@ def train_shared(epoch):
     
     for batch_idx, (inputs, targets) in enumerate(trainloader):
         policy = controller.sample()
+#         policy = [random.randint(0, 23) for _ in range(9)]
         inputs, targets = inputs.to(device), targets.to(device)
         shared_optimizer.zero_grad()
         outputs = net(inputs, policy)
@@ -131,8 +134,8 @@ def train_shared(epoch):
         total += targets.size(0)
         correct += predicted.eq(targets).sum().item()
 
-        progress_bar(batch_idx, len(trainloader), 'Loss: %.3f | Acc: %.3f%% (%d/%d) | %s'
-            % (train_loss/(batch_idx+1), 100.*correct/total, correct, total, policy))
+        progress_bar(batch_idx, len(trainloader), 'Loss: %.3f | Acc: %.3f%% (%d/%d)'
+            % (train_loss/(batch_idx+1), 100.*correct/total, correct, total))
     log_value('train_loss', train_loss/(batch_idx+1), epoch)
     log_value('train_accuracy', correct/total, epoch)
 
@@ -164,7 +167,8 @@ def train_controller(epoch):
                 inputs, targets = inputs.to(device), targets.to(device)
                 outputs = net(inputs, policy)
                 _, predicted = outputs.max(1)
-                rewards = predicted.eq(targets).sum().item()/inputs.size(0)
+                acc = predicted.eq(targets).sum().item()/inputs.size(0)
+                rewards = acc**3*10#2*((acc-0.70005)*10)**2*abs(rewards-0.70005)/(rewards-0.70005) ####20190615
 
             reward_history.append(rewards)
             entropy_history.append(np_entropies)
@@ -204,12 +208,19 @@ def train_controller(epoch):
 #                 reward_history, adv_history, entropy_history = [], [], []
 #                 total_loss = 0
 
-            progress_bar(controller_step, args.cstep, 'Adv: %.3f | Reward: %.3f | %s'% (sum(adv_history)/(controller_step+1), sum(reward_history)/(controller_step+1), policy))
+            progress_bar(controller_step, args.cstep, 'Adv: %.3f | Reward: %.3f'% (sum(adv_history)/(controller_step+1), sum(reward_history)/(controller_step+1)))
             controller_step += 1
         
     log_value('train_adv', sum(adv_history)/controller_step, epoch)
     log_value('train_reward', sum(reward_history)/controller_step, epoch)
 
+# def effective_count(policy):
+#     effective_count = 0
+#     for p in policy:
+#         if p in [7, 9, 10, 13, 16, 17, 18, 22, 23]:
+#             effective_count += 1
+#     return effective_count
+    
 def test(epoch, best=0):
 #     net.eval()
 #     controller.eval()
@@ -224,6 +235,11 @@ def test(epoch, best=0):
                 if sample_num>=100:
                     break
                 policy = controller.sample(is_train=False)
+#                 policy = [random.randint(0, 23) for _ in range(9)]
+                
+#                 while effective_count(policy) < 6:
+#                     policy = controller.sample(is_train=False)
+                
                 inputs, targets = inputs.to(device), targets.to(device)
                 shared_optimizer.zero_grad()
                 outputs = net(inputs, policy)
@@ -232,7 +248,7 @@ def test(epoch, best=0):
                 total = targets.size(0)
                 correct = predicted.eq(targets).sum().item()
 
-                progress_bar(sample_num, 100, 'Acc: %.3f%% (%d/%d) | %s' % (100.*correct/total, correct, total, policy))
+                progress_bar(sample_num, 100, 'Acc: %.3f%% (%d/%d)' % (100.*correct/total, correct, total))
 
                 sample_log.append(correct/total)
                 sample_num+=1
@@ -253,7 +269,8 @@ def test(epoch, best=0):
     log_value('test_accuracy_std', sample_log.std().item(), epoch)
     
     print(state['correct'], state['policy'])
-    torch.save(state, './checkpoint/%s_%d_%.3f.t7'%(args.save, epoch, best))
+    if best>0.8:
+        torch.save(state, './checkpoint/%s_%d_%.3f.t7'%(args.save, epoch, best))
 
                 
                 
